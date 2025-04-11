@@ -15,9 +15,12 @@ def generate_summary_report(metrics_dict):
     pd.DataFrame
         Summary report as a DataFrame.
     """
-    report_df = pd.DataFrame(metrics_dict).T.reset_index()
-    report_df.rename(columns={"index": "Model"}, inplace=True)
-    return report_df
+    summary = []
+    for model, metrics in metrics_dict.items():
+        metrics["Model"] = model
+        summary.append(metrics)
+    return pd.DataFrame(summary)
+#st.dataframe(generate_summary_report({selected_model: metrics}))
 
 def plot_actual_vs_predicted(y_true, y_pred, model_name):
     """

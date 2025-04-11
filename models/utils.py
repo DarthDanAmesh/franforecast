@@ -1,89 +1,53 @@
 from pytorch_forecasting import TimeSeriesDataSet
+from pytorch_forecasting.data.encoders import GroupNormalizer
 import pandas as pd
+import numpy as np
 
 def prepare_time_series_dataset(df, target_col, date_col, freq, prediction_length, max_encoder_length=60):
     """
-    Prepare a PyTorch Forecasting-compatible dataset.
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Input dataframe.
-    target_col : str
-        Name of the target column.
-    date_col : str
-        Name of the date column.
-    freq : str
-        Frequency of the time series (e.g., "M" for monthly).
-    prediction_length : int
-        Length of the forecast horizon.
-    max_encoder_length : int
-        Maximum length of the lookback window.
-        
-    Returns
-    -------
-    TimeSeriesDataSet
-        PyTorch Forecasting-compatible dataset.
+    Robust time series dataset preparation with proper type handling
     """
-    # Create a copy to avoid modifying the original dataframe
+    # Create a copy to avoid modifying original data
     df = df.copy()
     
-    # Ensure the date column is in datetime format
-    df.loc[:, date_col] = pd.to_datetime(df[date_col])
+    # 1. Ensure proper datetime conversion and sorting
+    df[date_col] = pd.to_datetime(df[date_col])
+    df = df.sort_values(date_col).reset_index(drop=True)
     
-    # Format frequency properly (add "1" if it's just a letter)
-    if len(freq) == 1 or not any(char.isdigit() for char in freq):
-        freq = "1" + freq
+    # 2. Create proper integer time index (CRITICAL FIX)
+    df["time_idx"] = (df[date_col] - df[date_col].min()).dt.days
+    df["time_idx"] = df["time_idx"].astype(np.int64)  # Ensure proper integer type
     
-    # Sort by date to ensure correct time sequence
-    df = df.sort_values(by=date_col).reset_index(drop=True)
-    
-    # Add a time index column properly - this might have gaps
-    time_delta = pd.Timedelta(freq)
-    df.loc[:, "time_idx"] = ((df[date_col] - df[date_col].min()) / time_delta).astype(int)
-    
-    # Define group IDs (if applicable) - use actual grouping if available
+    # 3. Handle group IDs
+    group_id_col = "group_id"
     if 'Item_code' in df.columns:
-        df.loc[:, "group_id"] = df['Item_code'].astype(str)
+        df[group_id_col] = df['Item_code'].astype(str)
     else:
-        df.loc[:, "group_id"] = "0"  # Default when no grouping is available
+        df[group_id_col] = "0"  # Single group
     
-    # Check which columns are actually available in the dataframe
-    available_columns = set(df.columns)
+    # 4. Calculate training cutoff (80% of time range)
+    training_cutoff = int(df["time_idx"].max() * 0.8)  # Ensure integer cutoff
     
-    # Define known categoricals and reals based on what's available
-    known_categoricals = [col for col in ["holiday"] if col in available_columns]
-    known_reals = [col for col in ["month", "day", "dayofweek", "year"] if col in available_columns]
-    
-    # Add any additional available numeric columns that might be useful
-    for col in available_columns:
-        if col not in [date_col, target_col, "time_idx", "group_id"] + known_categoricals + known_reals:
-            if pd.api.types.is_numeric_dtype(df[col]):
-                known_reals.append(col)
-    
-    # Create the dataset with proper parameters
+    # 5. Create the dataset with proper parameters
     dataset = TimeSeriesDataSet(
-        df,
+        df[df["time_idx"] <= training_cutoff],
         time_idx="time_idx",
         target=target_col,
-        group_ids=["group_id"],
-        min_encoder_length=max_encoder_length // 2,
+        group_ids=[group_id_col],
+        min_encoder_length=max(max_encoder_length // 2, 1),  # Ensure at least 1
         max_encoder_length=max_encoder_length,
         min_prediction_length=1,
         max_prediction_length=prediction_length,
         static_categoricals=[],
-        static_reals=[],
-        time_varying_known_categoricals=known_categoricals,
-        time_varying_known_reals=known_reals,
+        time_varying_known_reals=["time_idx"],
         time_varying_unknown_reals=[target_col],
-        target_normalizer="auto",  # Auto-select normalizer based on data
+        target_normalizer=GroupNormalizer(groups=[group_id_col]),
         add_relative_time_idx=True,
         add_target_scales=True,
-        add_encoder_length=True,
-        allow_missing_timesteps=True,  # This is the key parameter that needs to be added
+        allow_missing_timesteps=True,
     )
     
-    return dataset
+    return dataset, df, training_cutoff
 
 def generate_forecast(model, test_data, is_gluonts=False):
     """

@@ -2,17 +2,40 @@
 
 from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
-from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
-from pytorch_forecasting.data import GroupNormalizer
-from pytorch_forecasting.metrics import QuantileLoss
-from pytorch_forecasting.models import TemporalFusionTransformer
-from pytorch_forecasting.data import TimeSeriesDataSet
-from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
-import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet, QuantileLoss
+from pytorch_forecasting.data.encoders import GroupNormalizer
+from lightning.pytorch import Trainer
+from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
+from lightning.pytorch.loggers import TensorBoardLogger
+import lightning.pytorch as pl
 import pandas as pd
 
+# Remove these if present:
+# from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
+# from pytorch_lightning import Trainer
+# from pytorch_lightning.loggers import TensorBoardLogger
+# import pytorch_lightning as pl
+
 _ = pd
+
+
+config = {
+    "min_rows": 100,
+    "default_aggregation": "Monthly",
+    "prediction_length": 6,
+    "model_params": {
+        "RandomForest": {"n_estimators": 100},
+        "XGBoost": {"n_estimators": 100, "learning_rate": 0.1},
+        "TFT": {
+            "max_epochs": 50,
+            "learning_rate": 0.03,
+            "hidden_size": 160,
+            "attention_head_size": 4,
+            "dropout": 0.1,
+            "batch_size": 64
+        }
+    }
+}
 
 def train_random_forest(X_train, y_train, params):
     """
@@ -54,83 +77,60 @@ def train_xgboost(X_train, y_train, params):
     model.fit(X_train, y_train)
     return model
 
-def train_tft(train_dataset, **kwargs):
+def train_tft(train_dataset, full_data, training_cutoff, **kwargs):
     """
-    Train a Temporal Fusion Transformer model.
-
-    Parameters
-    ----------
-    train_dataset : TimeSeriesDataSet
-        Training dataset.
-    **kwargs : dict
-        Additional parameters for model configuration:
-        - batch_size (int): Batch size for training and validation. Default is 64.
-        - hidden_size (int): Size of the hidden layers. Default is 160.
-        - attention_head_size (int): Number of attention heads. Default is 4.
-        - dropout (float): Dropout rate. Default is 0.1.
-        - hidden_continuous_size (int): Size of hidden layers for continuous variables. Default is hidden_size // 2.
-        - learning_rate (float): Learning rate. Default is 0.03.
-        - patience (int): Early stopping patience. Default is 5.
-        - max_epochs (int): Maximum number of epochs. Default is 50.
-        - limit_train_batches (int or float): Limit the number of training batches per epoch. Default is None (full training).
-        - gradient_clip_val (float): Gradient clipping value. Default is 0.1.
-
-    Returns
-    -------
-    TemporalFusionTransformer
-        Trained TFT model.
+    Final working version with proper Lightning compatibility
     """
     try:
-        # Create train and validation dataloaders
-        train_dataloader = train_dataset.to_dataloader(
-            batch_size=kwargs.get("batch_size", 64),
-            shuffle=True
-        )
-        
-        validation = TimeSeriesDataSet.from_dataset(
+        # 1. Create validation dataset
+        val_data = full_data[full_data["time_idx"] > training_cutoff]
+        val_dataset = TimeSeriesDataSet.from_dataset(
             train_dataset,
-            train_dataset.split_by_ratio(0.9)[1],  # 10% for validation
+            val_data,
             predict=True,
             stop_randomization=True
         )
-        val_dataloader = validation.to_dataloader(
-            batch_size=kwargs.get("batch_size", 64),
-            shuffle=False
+        
+        # 2. Create dataloaders with proper batch sizes
+        batch_size = min(kwargs.get("batch_size", 64), len(train_dataset))
+        train_dataloader = train_dataset.to_dataloader(
+            train=True,
+            batch_size=batch_size,
+            num_workers=0,
+            shuffle=True
+        )
+        val_dataloader = val_dataset.to_dataloader(
+            train=False,
+            batch_size=batch_size * 2,  # Larger batch for validation
+            num_workers=0
         )
         
-        # Configure the network
+        # 3. Initialize TFT model with proper parameters
         tft = TemporalFusionTransformer.from_dataset(
             train_dataset,
             hidden_size=kwargs.get("hidden_size", 160),
             attention_head_size=kwargs.get("attention_head_size", 4),
             dropout=kwargs.get("dropout", 0.1),
-            hidden_continuous_size=kwargs.get("hidden_continuous_size", 160 // 2),
+            hidden_continuous_size=kwargs.get("hidden_continuous_size", 80),
+            loss=QuantileLoss(),
             learning_rate=kwargs.get("learning_rate", 0.03),
-            log_interval=10,
-            log_val_interval=1,
             optimizer="Adam"
         )
         
-        # Configure training
-        early_stop_callback = EarlyStopping(
-            monitor="val_loss",
-            min_delta=1e-4,
-            patience=kwargs.get("patience", 5),
-            verbose=False,
-            mode="min"
-        )
-        lr_logger = LearningRateMonitor()
-        logger = TensorBoardLogger("logs", name="tft_training")
+        # 4. Configure trainer with proper callbacks
         trainer = pl.Trainer(
             max_epochs=kwargs.get("max_epochs", 50),
             accelerator="auto",
-            callbacks=[lr_logger, early_stop_callback],
-            gradient_clip_val=kwargs.get("gradient_clip_val", 0.1),
-            limit_train_batches=kwargs.get("limit_train_batches", None),
-            logger=logger,
+            gradient_clip_val=0.1,
+            callbacks=[
+                EarlyStopping(monitor="val_loss", patience=5, mode="min"),
+                LearningRateMonitor()
+            ],
+            enable_model_summary=True,
+            enable_checkpointing=True,
         )
         
-        # Fit the network
+        # 5. Train the model
         trainer.fit(
             tft,
             train_dataloaders=train_dataloader,
@@ -140,5 +140,9 @@ def train_tft(train_dataset, **kwargs):
         return tft
         
     except Exception as e:
-        print(f"TFT Training Error: {e}")
+        print(f"Training failed: {str(e)}")
+        print("Debug info:")
+        print(f"Training cutoff: {training_cutoff}")
+        print(f"Time index dtype: {full_data['time_idx'].dtype}")
+        print(f"Time index range: {full_data['time_idx'].min()} to {full_data['time_idx'].max()}")
         raise
