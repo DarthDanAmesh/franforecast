@@ -2,6 +2,7 @@
 
 import pandas as pd
 import streamlit as st
+import matplotlib.pyplot as plt
 from datetime import datetime
 
 def generate_html_report(metrics_df, filename="report.html"):
@@ -29,22 +30,58 @@ def generate_html_report(metrics_df, filename="report.html"):
         f.write(html_content)
     st.success(f"HTML report generated: {filename}")
 
-def generate_streamlit_report(metrics_df, forecasts_df):
-    """
-    Generate an interactive report in Streamlit.
-    Parameters
-    ----------
-    metrics_df : pd.DataFrame
-        Dataframe containing evaluation metrics.
-    forecasts_df : pd.DataFrame
-        Dataframe containing forecasted values.
-    """
-    st.header("Forecasting Report")
-    st.subheader("Evaluation Metrics")
-    st.dataframe(metrics_df)
 
-    st.subheader("Forecasted Values")
-    st.dataframe(forecasts_df)
+import numpy as np
+
+def generate_streamlit_report(metrics, forecasts, test_df):
+    """
+    Enhanced reporting with proper metrics handling
+    """
+    st.subheader("Detailed Forecast Analysis")
+    
+    # 1. Metrics display
+    with st.expander("Model Metrics"):
+        # Convert metrics dict to DataFrame
+        metrics_df = pd.DataFrame([metrics])
+        st.table(metrics_df)
+    
+    # 2. Error distribution
+    with st.expander("Error Analysis"):
+        try:
+            # Ensure forecasts is numpy array
+            forecasts = np.asarray(forecasts)
+            
+            # Get corresponding actual values
+            actual_values = test_df["target"].values[-len(forecasts):]
+            
+            # Calculate errors
+            errors = actual_values - forecasts
+            
+            # Plot histogram if we have data
+            if len(errors) > 0:
+                fig, ax = plt.subplots(figsize=(10, 5))
+                ax.hist(errors, bins=30, color="#2ca02c", alpha=0.7)
+                ax.set_title("Prediction Error Distribution")
+                ax.set_xlabel("Error")
+                ax.set_ylabel("Frequency")
+                st.pyplot(fig)
+                
+                # Show error statistics
+                error_stats = {
+                    "Mean Error": np.mean(errors),
+                    "Std Dev": np.std(errors),
+                    "Min Error": np.min(errors),
+                    "Max Error": np.max(errors)
+                }
+                st.table(pd.DataFrame([error_stats]))
+            else:
+                st.warning("No error data available for visualization")
+                
+        except Exception as e:
+            st.warning(f"Could not show error analysis: {str(e)}")
+            st.write("Debug info:")
+            st.write(f"Actual values shape: {test_df['target'].shape}")
+            st.write(f"Forecasts shape: {forecasts.shape}")
 
 def export_to_pdf(metrics_df, filename="report.pdf"):
     """

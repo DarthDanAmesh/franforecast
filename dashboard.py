@@ -255,9 +255,36 @@ def main():
         st.code(traceback.format_exc())
         st.stop()
 
-    st.dataframe(generate_summary_report({selected_model: metrics}))
-    plot_actual_vs_predicted(test_df["target"], forecasts, selected_model)
-    generate_streamlit_report(metrics, forecasts)
+    # In your main function, after metrics calculation:
+    import numpy as np
+    try:
+        # Show predictions
+        st.subheader("Model Predictions")
+        plot_actual_vs_predicted(test_df["target"].values, forecasts, selected_model)
+        
+        # Generate full report
+        generate_streamlit_report(metrics, forecasts, test_df)
+        
+    except Exception as e:
+        st.error(f"Visualization failed: {str(e)}")
+        st.write("Debug info:")
+        st.write(f"Actual values sample: {test_df['target'].values[:5]}")
+        st.write(f"Forecasts sample: {forecasts[:5] if len(forecasts) > 5 else forecasts}")
+
+    #here
+    #st.dataframe(generate_summary_report({selected_model: metrics}))
+    #st.subheader("Model Predictions")
+    
+    #plot_actual_vs_predicted(test_df["target"], forecasts, selected_model)
+    
+    #here
+    #plot_actual_vs_predicted(test_df["target"].values, forecasts, selected_model)
+    #generate_streamlit_report(metrics, forecasts)
+
+    print(f"Actual shape: {test_df['target'].shape}")
+    print(f"Forecast shape: {forecasts.shape}")
+    st.write(f"Actual values: {test_df['target'].values[-5:]}")
+    st.write(f"Forecasts: {forecasts[-5:]}")
 
     display_message("Forecasting completed successfully!", "success")
 
