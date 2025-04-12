@@ -1,0 +1,12 @@
+streamlit
+holidays
+weasyprint
+streamlit
+scipy
+scikit-learn
+pandas
+joblib
+xgboost
+altair
+lightning
+lightning[extra]
