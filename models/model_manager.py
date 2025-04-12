@@ -3,10 +3,38 @@ import torch
 from pathlib import Path
 from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
 from pytorch_forecasting.data.encoders import GroupNormalizer
+from pytorch_forecasting import DeepAR, NormalDistributionLoss
 import hashlib
 import json
 import pandas as pd
 import torch.serialization
+import logging
+
+
+config = {
+    "min_rows": 100,
+    "default_aggregation": "Monthly",
+    "prediction_length": 6,
+    "model_params": {
+        "RandomForest": {"n_estimators": 100},
+        "XGBoost": {"n_estimators": 100, "learning_rate": 0.1},
+        "TFT": {
+            "max_epochs": 50,
+            "learning_rate": 0.03,
+            "hidden_size": 160,
+            "attention_head_size": 4,
+            "dropout": 0.1,
+            "batch_size": 64
+        },
+        "DeepAR": {
+            "max_epochs": 100,
+            "learning_rate": 1e-4,
+            "hidden_size": 32,
+            "dropout": 0.1,
+            "batch_size": 64
+        }
+    }
+}
 
 class ModelManager:
     def __init__(self, model_dir="saved_models", tft_subdir="tft_models"):
@@ -93,4 +121,71 @@ class ModelManager:
         except Exception as e:
             print(f"Error loading TFT model: {e}")
             return None
+    
+    # Add these methods to your model_manager class
+
+    def save_deepar_model(self, model, dataset, filename):
+        path = self.tft_dir / filename
+        """
+        Save a trained DeepAR model to disk.
+        
+        Parameters
+        ----------
+        model : DeepAR
+            Trained DeepAR model
+        dataset : TimeSeriesDataSet
+            The dataset used for training (needed for reconstruction)
+        filename : str
+            Name of the file to save the model to
+        """
+        try:
+            
+            # Save the model parameters
+            torch.save({
+                "state_dict": model.state_dict(),
+                "dataset_parameters": dataset.get_parameters()
+            }, path)
+            logging.info(f"Saved DeepAR model to {path}")
+        except Exception as e:
+            logging.error(f"Failed to save DeepAR model: {str(e)}")
+            raise
+
+    def load_deepar_model(self, filename, example_dataset):
+        path = self.tft_dir / filename
+        """
+        Load a saved DeepAR model from disk.
+        
+        Parameters
+        ----------
+        filename : str
+            Name of the file to load the model from
+        example_dataset : TimeSeriesDataSet
+            Example dataset with the same structure as the one used for training
+            
+        Returns
+        -------
+        DeepAR
+            Loaded DeepAR model
+        """
+        try:
+            checkpoint = torch.load(path)
+            
+            # Initialize model with the same configuration
+            model = DeepAR.from_dataset(
+                example_dataset,
+                hidden_size=config["model_params"]["DeepAR"].get("hidden_size", 32),
+                dropout=config["model_params"]["DeepAR"].get("dropout", 0.1),
+                loss=NormalDistributionLoss()
+            )
+            
+            # Load the state dict
+            model.load_state_dict(checkpoint["state_dict"])
+            logging.info(f"Loaded DeepAR model from {path}")
+            return model
+        except FileNotFoundError:
+            logging.warning(f"No saved DeepAR model found at {path}")
+            return None
+        except Exception as e:
+            logging.error(f"Failed to load DeepAR model: {str(e)}")
+            raise
 

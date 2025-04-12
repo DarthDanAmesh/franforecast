@@ -16,7 +16,7 @@ def get_user_input():
     end_date = st.sidebar.date_input("End Date:", date.today())
 
     st.sidebar.header("Model Selection")
-    model_options = ["Random Forest", "XGBoost", "TFT"]  # Updated to match allowed models
+    model_options = ["Random Forest", "XGBoost", "TFT", "DeepAR"]  # Updated to match allowed models
     selected_model = st.sidebar.selectbox("Select Model:", model_options)
 
     st.sidebar.header("Aggregation Options")

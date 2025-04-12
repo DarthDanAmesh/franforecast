@@ -3,10 +3,11 @@
 from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
 from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet, QuantileLoss
-from pytorch_forecasting.data.encoders import GroupNormalizer
+from pytorch_forecasting.data.encoders import GroupNormalizer, NaNLabelEncoder, TorchNormalizer
 from lightning.pytorch import Trainer
 from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
 from lightning.pytorch.loggers import TensorBoardLogger
+from pytorch_forecasting import DeepAR, NormalDistributionLoss
 import lightning.pytorch as pl
 import pandas as pd
 
@@ -19,6 +20,10 @@ import pandas as pd
 _ = pd
 
 
+# Add to your imports section:
+
+
+# Add DeepAR parameters to your config
 config = {
     "min_rows": 100,
     "default_aggregation": "Monthly",
@@ -33,9 +38,112 @@ config = {
             "attention_head_size": 4,
             "dropout": 0.1,
             "batch_size": 64
+        },
+        "DeepAR": {
+            "max_epochs": 100,
+            "learning_rate": 1e-4,
+            "hidden_size": 32,
+            "dropout": 0.1,
+            "batch_size": 64
         }
     }
 }
+
+
+def train_deepar(train_df, full_data, training_cutoff, context_length, prediction_length, **kwargs):
+    """
+    Train a DeepAR model for time series forecasting.
+    """
+    try:
+        # Ensure we have proper group_ids
+        if "group_id" not in train_df.columns:
+            train_df["group_id"] = 0  # Default group if not specified
+            
+        # 1. Create training dataset with proper configuration
+        training_dataset = TimeSeriesDataSet(
+            train_df.loc[train_df.time_idx <= training_cutoff],
+            time_idx="time_idx",
+            target="target",
+            group_ids=["group_id"],
+            min_encoder_length=max(1, context_length // 2),  # More flexible encoder length
+            max_encoder_length=context_length,
+            min_prediction_length=1,
+            max_prediction_length=prediction_length,
+            time_varying_known_reals=["time_idx"],
+            time_varying_unknown_reals=["target"],
+            target_normalizer=TorchNormalizer(method="standard"),  # Changed normalizer
+            add_relative_time_idx=True,
+            add_target_scales=True,
+            randomize_length=None,
+            allow_missing_timesteps=True  # Changed to False for more strict checking
+        )        
+        # 2. Create validation dataset
+        validation_dataset = TimeSeriesDataSet.from_dataset(
+            training_dataset,
+            full_data,
+            min_prediction_idx=training_cutoff + 1
+        )
+        
+        # 3. Create dataloaders
+        batch_size = kwargs.get("batch_size", 64)
+        train_dataloader = training_dataset.to_dataloader(
+            train=True, 
+            batch_size=batch_size, 
+            num_workers=0
+        )
+        val_dataloader = validation_dataset.to_dataloader(
+            train=False, 
+            batch_size=batch_size, 
+            num_workers=0
+        )
+        
+        # 4. Initialize DeepAR model
+        pl.seed_everything(42)  # For reproducibility
+        model = DeepAR.from_dataset(
+            training_dataset,
+            hidden_size=kwargs.get("hidden_size", 32),
+            dropout=kwargs.get("dropout", 0.1),
+            loss=NormalDistributionLoss(),
+            learning_rate=kwargs.get("learning_rate", 1e-4),
+            log_interval=10,
+            log_val_interval=1,
+        )
+        
+        # 5. Configure trainer with callbacks
+        early_stop_callback = EarlyStopping(
+            monitor="val_loss", 
+            patience=5, 
+            mode="min"
+        )
+        
+        trainer = pl.Trainer(
+            max_epochs=kwargs.get("max_epochs", 100),
+            accelerator="auto",
+            gradient_clip_val=0.1,
+            callbacks=[
+                early_stop_callback,
+                LearningRateMonitor()
+            ],
+            enable_model_summary=True,
+            enable_checkpointing=True,
+        )
+        
+        # 6. Train the model
+        trainer.fit(
+            model,
+            train_dataloaders=train_dataloader,
+            val_dataloaders=val_dataloader,
+        )
+        
+        return model
+        
+    except Exception as e:
+        print(f"DeepAR training failed: {str(e)}")
+        print("Debug info:")
+        print(f"Training cutoff: {training_cutoff}")
+        print(f"Time index dtype: {full_data['time_idx'].dtype}")
+        print(f"Time index range: {full_data['time_idx'].min()} to {full_data['time_idx'].max()}")
+        raise
 
 def train_random_forest(X_train, y_train, params):
     """
