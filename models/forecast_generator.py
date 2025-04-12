@@ -20,10 +20,13 @@ def generate_forecast(model, test_data, is_gluonts=False):
             
             # Get predictions - returns (n_samples, prediction_length)
             predictions = model.predict(dataloader)
+
+            if len(predictions) == 1 and len(test_data)>1:
+                return np.tile(predictions[0], len(test_data))
             
             # Convert to 1D array by taking the first prediction step
             # Alternatively use mean/median across prediction horizon
-            return predictions[:, 0].cpu().numpy().flatten()
+            return predictions.flatten()
             
         except Exception as e:
             print(f"[ERROR] DeepAR prediction failed: {str(e)}")
