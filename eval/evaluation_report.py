@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import streamlit as st
+import plotly.graph_objects as go
 
 def generate_summary_report(metrics_dict):
     """
@@ -25,7 +26,7 @@ def generate_summary_report(metrics_dict):
 
 def plot_actual_vs_predicted(y_true, y_pred, model_name):
     """
-    Enhanced plotting that properly handles DeepAR's single prediction output
+    Enhanced plotting that properly handles DeepAR's single prediction output using Plotly.
     """
     # Convert to numpy arrays if not already
     y_true = np.asarray(y_true)
@@ -45,29 +46,65 @@ def plot_actual_vs_predicted(y_true, y_pred, model_name):
     y_true = y_true[-min_length:]  # Take most recent values
     y_pred = y_pred[-min_length:]
     
-    # Create figure with improved layout
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), 
-                                gridspec_kw={'height_ratios': [3, 1]})
-    
-    # Main plot - Actual vs Predicted
-    ax1.plot(y_true, label="Actual", color="#1f77b4", linewidth=2, marker='o', markersize=5)
-    ax1.plot(y_pred, label="Predicted", color="#ff7f0e", linewidth=2, 
-            linestyle='--', marker='x', markersize=5)
-    ax1.set_title(f"Actual vs Predicted ({model_name})", fontsize=14, pad=10)
-    ax1.set_ylabel("Value", fontsize=12)
-    ax1.grid(True, linestyle='--', alpha=0.7)
-    ax1.legend(fontsize=12)
-    
-    # Error plot below
+    # Calculate errors
     errors = y_true - y_pred
-    ax2.plot(errors, label="Error", color="#d62728", linewidth=1.5)
-    ax2.axhline(0, color='black', linestyle='--', linewidth=0.8)
-    ax2.set_xlabel("Time Period", fontsize=12)
-    ax2.set_ylabel("Error", fontsize=12)
-    ax2.grid(True, linestyle='--', alpha=0.5)
     
-    plt.tight_layout()
-    st.pyplot(fig)
+    # Create Plotly figure
+    fig = go.Figure()
+    
+    # Add Actual vs Predicted traces
+    fig.add_trace(go.Scatter(
+        x=list(range(len(y_true))),
+        y=y_true,
+        mode='lines+markers',
+        name='Actual',
+        line=dict(color="#1f77b4", width=2),
+        marker=dict(size=6)
+    ))
+    fig.add_trace(go.Scatter(
+        x=list(range(len(y_pred))),
+        y=y_pred,
+        mode='lines+markers',
+        name='Predicted',
+        line=dict(color="#ff7f0e", width=2, dash='dash'),
+        marker=dict(symbol='x', size=6)
+    ))
+    
+    # Update layout for main plot
+    fig.update_layout(
+        title=f"Actual vs Predicted ({model_name})",
+        xaxis_title="Time Period",
+        yaxis_title="Value",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(t=50),
+        height=400
+    )
+    
+    # Show the main plot
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Create an error plot
+    error_fig = go.Figure()
+    error_fig.add_trace(go.Scatter(
+        x=list(range(len(errors))),
+        y=errors,
+        mode='lines+markers',
+        name='Error',
+        line=dict(color="#d62728", width=1.5)
+    ))
+    error_fig.add_hline(y=0, line_dash="dash", line_color="black")
+    
+    # Update layout for error plot
+    error_fig.update_layout(
+        title="Prediction Errors",
+        xaxis_title="Time Period",
+        yaxis_title="Error",
+        margin=dict(t=50),
+        height=300
+    )
+    
+    # Show the error plot
+    st.plotly_chart(error_fig, use_container_width=True)
     
     # Show data table with statistics
     st.subheader("Prediction Data")
@@ -93,19 +130,31 @@ def plot_actual_vs_predicted(y_true, y_pred, model_name):
 
 def generate_comparison_plot(metrics_dict):
     """
-    Generate a comparison plot of evaluation metrics across models.
-    Parameters
-    ----------
-    metrics_dict : dict
-        Dictionary containing evaluation metrics for each model.
+    Generate a comparison plot of evaluation metrics across models using Plotly.
     """
     metrics_df = pd.DataFrame(metrics_dict).T.reset_index()
     metrics_df.rename(columns={"index": "Model"}, inplace=True)
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    # Create Plotly figure
+    fig = go.Figure()
+
     for metric in ["MAPE", "SMAPE", "RMSE", "MAE"]:
-        ax.bar(metrics_df["Model"], metrics_df[metric], label=metric)
-    ax.set_title("Model Comparison")
-    ax.set_ylabel("Metric Value")
-    ax.legend()
-    st.pyplot(fig)
+        fig.add_trace(go.Bar(
+            x=metrics_df["Model"],
+            y=metrics_df[metric],
+            name=metric
+        ))
+
+    # Update layout
+    fig.update_layout(
+        title="Model Comparison",
+        xaxis_title="Model",
+        yaxis_title="Metric Value",
+        barmode='group',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(t=50),
+        height=400
+    )
+
+    # Show the plot
+    st.plotly_chart(fig, use_container_width=True)

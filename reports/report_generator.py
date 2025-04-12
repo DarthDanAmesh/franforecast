@@ -1,9 +1,10 @@
 # Generates summary reports (HTML, PDF, or Streamlit-based)
-
+import plotly.express as px
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 from datetime import datetime
+import numpy as np
 
 def generate_html_report(metrics_df, filename="report.html"):
     """
@@ -31,11 +32,10 @@ def generate_html_report(metrics_df, filename="report.html"):
     st.success(f"HTML report generated: {filename}")
 
 
-import numpy as np
 
 def generate_streamlit_report(metrics, forecasts, test_df):
     """
-    Enhanced reporting with proper metrics handling
+    Enhanced reporting with proper metrics handling using Plotly.
     """
     st.subheader("Detailed Forecast Analysis")
     
@@ -59,12 +59,25 @@ def generate_streamlit_report(metrics, forecasts, test_df):
             
             # Plot histogram if we have data
             if len(errors) > 0:
-                fig, ax = plt.subplots(figsize=(10, 5))
-                ax.hist(errors, bins=30, color="#2ca02c", alpha=0.7)
-                ax.set_title("Prediction Error Distribution")
-                ax.set_xlabel("Error")
-                ax.set_ylabel("Frequency")
-                st.pyplot(fig)
+                # Create a Plotly histogram
+                fig = px.histogram(
+                    x=errors,
+                    nbins=30,
+                    title="Prediction Error Distribution",
+                    labels={"x": "Error", "y": "Frequency"},
+                    color_discrete_sequence=["#2ca02c"]
+                )
+                
+                # Update layout for better appearance
+                fig.update_layout(
+                    xaxis_title="Error",
+                    yaxis_title="Frequency",
+                    margin=dict(t=50),
+                    height=400
+                )
+                
+                # Show the histogram
+                st.plotly_chart(fig, use_container_width=True)
                 
                 # Show error statistics
                 error_stats = {
@@ -82,6 +95,7 @@ def generate_streamlit_report(metrics, forecasts, test_df):
             st.write("Debug info:")
             st.write(f"Actual values shape: {test_df['target'].shape}")
             st.write(f"Forecasts shape: {forecasts.shape}")
+
 
 def export_to_pdf(metrics_df, filename="report.pdf"):
     """
