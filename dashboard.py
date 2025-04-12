@@ -35,7 +35,7 @@ config = {
             "dropout": 0.1,
             "batch_size": 64
         },
-        "DeepAR": {  # Add this section
+        "DeepAR": {
             "max_epochs": 100,
             "learning_rate": 1e-4,
             "hidden_size": 32,
@@ -45,12 +45,7 @@ config = {
     }
 }
 
-
-
-
-# In your main function:
-
-
+#main function
 def main():
 
     st.title("Forecasting Application")
@@ -271,18 +266,8 @@ def main():
         st.write(f"Actual values sample: {test_df['target'].values[:5]}")
         st.write(f"Forecasts sample: {forecasts[:5] if len(forecasts) > 5 else forecasts}")
 
-    #here
-    #st.dataframe(generate_summary_report({selected_model: metrics}))
-    #st.subheader("Model Predictions")
-    
-    #plot_actual_vs_predicted(test_df["target"], forecasts, selected_model)
-    
-    #here
-    #plot_actual_vs_predicted(test_df["target"].values, forecasts, selected_model)
-    #generate_streamlit_report(metrics, forecasts)
-
-    print(f"Actual shape: {test_df['target'].shape}")
-    print(f"Forecast shape: {forecasts.shape}")
+    #print(f"Actual shape: {test_df['target'].shape}")
+    #print(f"Forecast shape: {forecasts.shape}")
     st.write(f"Actual values: {test_df['target'].values[-5:]}")
     st.write(f"Forecasts: {forecasts[-5:]}")
 
