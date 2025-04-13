@@ -10,7 +10,7 @@ from models.model_saver import save_model, load_model, get_data_fingerprint, loa
 from models.forecast_generator import generate_forecast
 from models.utils import prepare_time_series_dataset, preprocess_test_df
 from eval.metric_calculator import calculate_all_metrics
-from eval.evaluation_report import generate_summary_report, plot_actual_vs_predicted
+from eval.evaluation_report import generate_summary_report, plot_actual_vs_predicted, generate_comparison_plot
 from input.input_handler import get_user_input, validate_inputs
 from utils.date_utils import add_time_features
 from utils.streamlit_utils import display_message, stop_if_invalid
@@ -241,6 +241,16 @@ def main():
         metrics_df = pd.DataFrame([metrics])
         metrics_df["Model"] = selected_model
         st.dataframe(metrics_df)
+
+        # Add current model metrics to comparison dictionary
+        if 'model_comparison' not in st.session_state:
+            st.session_state.model_comparison = {}
+        st.session_state.model_comparison[selected_model] = metrics
+
+        # Generate comparison plot if we have multiple models
+        if len(st.session_state.model_comparison) > 1:
+            st.subheader("Model Comparison")
+            generate_comparison_plot(st.session_state.model_comparison)
 
     except Exception as e:
         st.error(f"Metric calculation failed: {str(e)}")
