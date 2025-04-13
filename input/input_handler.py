@@ -1,5 +1,6 @@
 # Handles user inputs for filtering, aggregation, and model selection
 import streamlit as st
+import pandas as pd
 from datetime import date
 
 def get_user_input():
@@ -55,3 +56,32 @@ def validate_inputs(user_inputs):
         return False, "Item code must be alphanumeric."
     
     return True, ""
+
+
+def aggregate_data(df, aggregation_level):
+    """
+    Aggregate daily data to the selected level
+    """
+    df = df.copy()
+    df['Date'] = pd.to_datetime(df['Date'])
+    
+    if aggregation_level == "Daily":
+        return df
+    
+    # Set date as index for resampling
+    df.set_index('Date', inplace=True)
+    
+    if aggregation_level == "Weekly":
+        # Weekly aggregation (Monday start)
+        agg_df = df.resample('W-MON').agg({
+            'target': 'sum',  # or 'mean' depending on your needs
+            # Add other numeric columns if needed
+        })
+    else:  # Monthly
+        agg_df = df.resample('MS').agg({
+            'target': 'sum',  # or 'mean'
+            # Add other numeric columns if needed
+        })
+    
+    agg_df.reset_index(inplace=True)
+    return agg_df

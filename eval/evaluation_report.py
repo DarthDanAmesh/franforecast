@@ -26,7 +26,7 @@ def generate_summary_report(metrics_dict):
 
 
 
-def plot_actual_vs_predicted(actual, predicted, model_name, aggregation_level, start_date=None):
+def plot_actual_vs_predicted_DEPRECATED(actual, predicted, model_name, aggregation_level, start_date=None):
     """
     Enhanced version with proper date handling
     
@@ -123,6 +123,89 @@ def plot_actual_vs_predicted(actual, predicted, model_name, aggregation_level, s
     
     return fig
 
+
+
+def plot_actual_vs_predicted(actual, predicted, model_name, aggregation_level, start_date=None):
+    """
+    Enhanced version that properly handles all aggregation levels
+    """
+    if len(actual) != len(predicted):
+        min_len = min(len(actual), len(predicted))
+        actual = actual[:min_len]
+        predicted = predicted[:min_len]
+    
+    # Create date sequence
+    if start_date is None:
+        dates = list(range(len(actual)))
+    else:
+        dates = pd.date_range(
+            start=start_date,
+            periods=len(actual),
+            freq=aggregation_level[0]  # 'D', 'W', 'ME'
+        )
+    
+    fig = go.Figure()
+    
+    # Add traces with different styling per aggregation
+    line_width = 2 if aggregation_level == "Daily" else 3
+    marker_size = 4 if aggregation_level == "Daily" else 6
+    
+    fig.add_trace(go.Scatter(
+        x=dates,
+        y=actual,
+        mode='lines+markers',
+        name='Actual',
+        line=dict(color='blue', width=line_width),
+        marker=dict(size=marker_size)
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=dates,
+        y=predicted,
+        mode='lines+markers',
+        name='Predicted',
+        line=dict(color='red', width=line_width, dash='dash'),
+        marker=dict(size=marker_size)
+    ))
+    
+    # Configure x-axis based on aggregation level
+    xaxis_config = {
+        "tickmode": "auto",
+        "nticks": min(12, len(dates)),  # Fewer ticks for weekly/monthly
+        "showgrid": True,
+        "tickangle": 45
+    }
+    
+    if start_date is not None:
+        xaxis_config["type"] = "date"
+        if aggregation_level == "Daily":
+            xaxis_config.update({
+                "tickformat": "%b %d\n%Y",
+                "hoverformat": "%A, %b %d, %Y"
+            })
+        elif aggregation_level == "Weekly":
+            xaxis_config.update({
+                "tickformat": "Week %U\n%Y",
+                "hoverformat": "Week %U (%b %d-%d), %Y"
+            })
+        else:  # Monthly
+            xaxis_config.update({
+                "tickformat": "%b %Y",
+                "hoverformat": "%B %Y"
+            })
+    
+    fig.update_layout(
+        title=f"{aggregation_level} Actual vs Predicted ({model_name})",
+        xaxis_title="Time Period",
+        yaxis_title="Value",
+        xaxis=xaxis_config,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        hovermode="x unified",
+        height=500,
+        margin=dict(t=50, b=100)
+    )
+    
+    return fig
 
 
 

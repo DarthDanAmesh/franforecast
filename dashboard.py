@@ -11,7 +11,7 @@ from models.forecast_generator import generate_forecast
 from models.utils import prepare_time_series_dataset, preprocess_test_df
 from eval.metric_calculator import calculate_all_metrics
 from eval.evaluation_report import generate_summary_report, plot_actual_vs_predicted, generate_comparison_plot
-from input.input_handler import get_user_input, validate_inputs
+from input.input_handler import get_user_input, validate_inputs, aggregate_data
 from utils.date_utils import add_time_features
 from utils.streamlit_utils import display_message, stop_if_invalid
 from reports.report_generator import generate_html_report, generate_streamlit_report
@@ -71,6 +71,10 @@ def main():
         st.stop()
     
     user_inputs = get_user_input()
+
+    # Apply aggregation
+    df = aggregate_data(df, user_inputs["aggregation_level"])
+
     validation_result = validate_inputs(user_inputs)
     stop_if_invalid(validation_result)
 
