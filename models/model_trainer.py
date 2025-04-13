@@ -11,12 +11,6 @@ from pytorch_forecasting import DeepAR, NormalDistributionLoss
 import lightning.pytorch as pl
 import pandas as pd
 
-# Remove these if present:
-# from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
-# from pytorch_lightning import Trainer
-# from pytorch_lightning.loggers import TensorBoardLogger
-# import pytorch_lightning as pl
-
 _ = pd
 
 

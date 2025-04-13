@@ -5,6 +5,7 @@ from pytorch_forecasting import TemporalFusionTransformer
 import torch
 import hashlib
 import json
+import pandas as pd
 
 
 def model_cache_path(model_name):
