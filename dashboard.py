@@ -266,7 +266,19 @@ def main():
     try:
         # Show predictions
         st.subheader("Model Predictions")
-        plot_actual_vs_predicted(test_df["target"].values, forecasts, selected_model)
+        #plot_actual_vs_predicted(test_df["target"].values, forecasts, selected_model)
+
+        plot_start_date = df['Date'].min() if 'Date' in df.columns else None
+    
+        fig = plot_actual_vs_predicted(
+            actual=test_df["target"].values,
+            predicted=forecasts,
+            model_name=selected_model,
+            aggregation_level=user_inputs["aggregation_level"],
+            start_date=plot_start_date
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
         
         # Generate full report
         generate_streamlit_report(metrics, forecasts, test_df)

@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
+from utils.date_utils import generate_dates
 
 def generate_summary_report(metrics_dict):
     """
@@ -24,109 +25,105 @@ def generate_summary_report(metrics_dict):
     return pd.DataFrame(summary)
 
 
-def plot_actual_vs_predicted(y_true, y_pred, model_name):
+
+def plot_actual_vs_predicted(actual, predicted, model_name, aggregation_level, start_date=None):
     """
-    Enhanced plotting that properly handles DeepAR's single prediction output using Plotly.
+    Enhanced version with proper date handling
+    
+    Parameters:
+    -----------
+    actual : array-like
+        Actual values
+    predicted : array-like
+        Predicted values
+    model_name : str
+        Name of model for title
+    aggregation_level : str
+        "Daily", "Weekly", or "Monthly"
+    start_date : datetime, optional
+        Start date for the time series
     """
-    # Convert to numpy arrays if not already
-    y_true = np.asarray(y_true)
-    y_pred = np.asarray(y_pred)
+    if len(actual) != len(predicted):
+        min_len = min(len(actual), len(predicted))
+        actual = actual[:min_len]
+        predicted = predicted[:min_len]
     
-    # Special handling for DeepAR single prediction case
-    if model_name == "DeepAR" and len(y_pred) == 1 and len(y_true) > 1:
-        y_pred = np.full(len(y_true), y_pred[0])  # Repeat single prediction
-        
-    # Handle different shapes for other models
-    elif y_pred.ndim > 1:
-        # If predictions are 2D (n_samples, horizon), use first step
-        y_pred = y_pred[:, 0]
+    # Generate dates if not provided
+    if start_date is None:
+        dates = list(range(len(actual)))  # Fallback to indices
+    else:
+        dates = generate_dates(
+            start_date=start_date,
+            end_date=None,
+            aggregation_level=aggregation_level,
+            num_periods=len(actual)
+        )
     
-    # Ensure equal lengths
-    min_length = min(len(y_true), len(y_pred))
-    y_true = y_true[-min_length:]  # Take most recent values
-    y_pred = y_pred[-min_length:]
-    
-    # Calculate errors
-    errors = y_true - y_pred
-    
-    # Create Plotly figure
     fig = go.Figure()
     
-    # Add Actual vs Predicted traces
+    # Add traces
     fig.add_trace(go.Scatter(
-        x=list(range(len(y_true))),
-        y=y_true,
+        x=dates,
+        y=actual,
         mode='lines+markers',
         name='Actual',
-        line=dict(color="#1f77b4", width=2),
-        marker=dict(size=6)
+        line=dict(color='blue', width=2)
     ))
+    
     fig.add_trace(go.Scatter(
-        x=list(range(len(y_pred))),
-        y=y_pred,
+        x=dates,
+        y=predicted,
         mode='lines+markers',
         name='Predicted',
-        line=dict(color="#ff7f0e", width=2, dash='dash'),
-        marker=dict(symbol='x', size=6)
+        line=dict(color='red', width=2, dash='dash')
     ))
     
-    # Update layout for main plot
+    # Configure x-axis based on aggregation level
+    xaxis_config = {
+        "type": "date" if start_date else "linear",
+        "tickmode": "auto",
+        "nticks": min(20, len(dates)),
+        "showgrid": True,
+        "tickangle": 45
+    }
+    
+    if start_date:  # Only apply date formatting if we have real dates
+        if aggregation_level == "Daily":
+            xaxis_config.update({
+                "tickformat": "%b %d, %Y",
+                "hoverformat": "%a, %b %d, %Y"
+            })
+        elif aggregation_level == "Weekly":
+            xaxis_config.update({
+                "tickformat": "Week of %b %d, %Y",
+                "hoverformat": "Week %U, %Y"
+            })
+        else:  # Monthly
+            xaxis_config.update({
+                "tickformat": "%b %Y",
+                "hoverformat": "%B %Y"
+            })
+    
     fig.update_layout(
-        title=f"Actual vs Predicted ({model_name})",
+        title=f"{aggregation_level} Actual vs Predicted ({model_name})",
         xaxis_title="Time Period",
         yaxis_title="Value",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(t=50),
-        height=400
+        xaxis=xaxis_config,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        hovermode="x unified",
+        height=500,
+        margin=dict(t=50, b=100)
     )
     
-    # Show the main plot
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Create an error plot
-    error_fig = go.Figure()
-    error_fig.add_trace(go.Scatter(
-        x=list(range(len(errors))),
-        y=errors,
-        mode='lines+markers',
-        name='Error',
-        line=dict(color="#d62728", width=1.5)
-    ))
-    error_fig.add_hline(y=0, line_dash="dash", line_color="black")
-    
-    # Update layout for error plot
-    error_fig.update_layout(
-        title="Prediction Errors",
-        xaxis_title="Time Period",
-        yaxis_title="Error",
-        margin=dict(t=50),
-        height=300
-    )
-    
-    # Show the error plot
-    st.plotly_chart(error_fig, use_container_width=True)
-    st.subheader("Prediction Data")
-    with st.expander("Table Data"):
-    # Show data table with statistics
-        
-        pred_df = pd.DataFrame({
-            "Actual": y_true,
-            "Predicted": y_pred,
-            "Error": errors
-        })
-    
-        # Add summary statistics row
-        stats_row = pd.DataFrame({
-            "Actual": ["Mean: {:.2f}".format(np.mean(y_true))],
-            "Predicted": ["Mean: {:.2f}".format(np.mean(y_pred))],
-            "Error": ["Mean: {:.2f}".format(np.mean(errors))]
-        })
-        pred_df = pd.concat([pred_df, stats_row], ignore_index=True)
-        
-        st.dataframe(pred_df.style.apply(
-            lambda x: ['background: lightyellow' if x.name == len(pred_df)-1 else '' for i in x],
-            axis=1
-        ))
+    return fig
+
+
 
 
 def generate_comparison_plot(metrics_dict):
