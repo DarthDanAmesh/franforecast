@@ -6,7 +6,7 @@ import pandas as pd
 
 _ = pd
 
-def plot_actual_vs_predicted(y_true, y_pred, title="Actual vs Predicted"):
+def plot_actual_vs_predicted_deprecated(y_true, y_pred, title="Actual vs Predicted"):
     """
     Plot actual vs predicted values.
     Parameters

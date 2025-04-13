@@ -1,6 +1,10 @@
 import streamlit as st
 import pandas as pd
 import traceback
+import plotly.express as px
+
+from pytorch_forecasting import TimeSeriesDataSet
+
 from data_prep.data_loader import load_data, preview_data
 from data_prep.data_cleaner import clean_data
 from data_prep.data_transformer import format_date_column, one_hot_encode
@@ -12,11 +16,12 @@ from models.utils import prepare_time_series_dataset, preprocess_test_df
 from eval.metric_calculator import calculate_all_metrics
 from eval.evaluation_report import generate_summary_report, plot_actual_vs_predicted, generate_comparison_plot
 from input.input_handler import get_user_input, validate_inputs, aggregate_data
+from input.grouping_input import prepare_grouped_data
 from utils.date_utils import add_time_features
 from utils.streamlit_utils import display_message, stop_if_invalid
 from reports.report_generator import generate_html_report, generate_streamlit_report
 from models.model_manager import ModelManager
-from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
+
 
 
 # Configuration
@@ -69,30 +74,51 @@ def main():
     if missing_cols:
         st.error(f"Missing required columns: {missing_cols}")
         st.stop()
+
+    #user_inputs = get_user_input()
+    user_inputs = get_user_input(df.columns.tolist())
     
-    user_inputs = get_user_input()
-
-    # Apply aggregation
-    df = aggregate_data(df, user_inputs["aggregation_level"])
-
-    validation_result = validate_inputs(user_inputs)
-    stop_if_invalid(validation_result)
-
+    # First filter by date and item
     try:
         start_date = pd.to_datetime(user_inputs["start_date"])
         end_date = pd.to_datetime(user_inputs["end_date"])
         date_mask = (df['Date'] >= start_date) & (df['Date'] <= end_date)
-        df = df.loc[date_mask].copy()
+        filtered_df = df.loc[date_mask].copy()
 
-        if user_inputs["item_code"] and 'Item_code' in df.columns:
-            df = df[df['Item_code'] == user_inputs["item_code"]]
+        if user_inputs.get("item_filter") and 'Item_code' in filtered_df.columns:
+            filtered_df = filtered_df[filtered_df['Item_code'] == user_inputs["item_filter"]]
 
     except Exception as e:
         st.error(f"Data filtering failed: {str(e)}")
         st.stop()
 
+    # Apply aggregation while preserving grouping columns
+    group_cols = user_inputs['group_by'] if user_inputs['group_by'] else None
+    df = aggregate_data(filtered_df, 
+                       user_inputs["aggregation_level"], 
+                       group_columns=group_cols)
+
     df = add_time_features(df, date_col='Date')
 
+    ## Process data
+    grouped_data = prepare_grouped_data(df, user_inputs)
+
+    st.subheader("Data Trend Analysis")
+    # Create interactive plot
+    fig = px.line(
+        grouped_data,
+        x='Date',
+        y='target',
+        color='group' if user_inputs['group_by'] else None,
+        title=f"Trends by {', '.join(user_inputs['group_by'])}" if user_inputs['group_by'] else "Overall Trend",
+        labels={'target': 'Value', 'Date': 'Date Period'},
+        color_discrete_sequence=px.colors.qualitative.Plotly
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+
+
+    #train split info
     train_size = int(len(df) * 0.8)
     train_df, test_df = df[:train_size], df[train_size:]
 
@@ -200,10 +226,6 @@ def main():
             # Preprocess test_df to match train_df (time_idx, group_id, etc.)
             test_df = preprocess_test_df(test_df, df)
 
-            # Rename target column if needed
-            #test_df.rename(columns={user_inputs["target_column"]: "target"}, inplace=True)
-
-
             # Safely get feature lists with fallback to empty list if None
             def safe_get(attr):
                 return getattr(train_dataset, attr, []) or []
@@ -233,6 +255,7 @@ def main():
         st.write("Details:")
         st.code(traceback.format_exc())
         st.stop()
+
 
     try:
         # Ensure proper alignment of forecasts and actual values
@@ -265,12 +288,11 @@ def main():
         st.code(traceback.format_exc())
         st.stop()
 
+    
     # In your main function, after metrics calculation:
-    import numpy as np
     try:
         # Show predictions
         st.subheader("Model Predictions")
-        #plot_actual_vs_predicted(test_df["target"].values, forecasts, selected_model)
 
         plot_start_date = df['Date'].min() if 'Date' in df.columns else None
     

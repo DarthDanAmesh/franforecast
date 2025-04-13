@@ -1,5 +1,6 @@
 # Functions for working with dates (e.g., formatting, resampling)
 import pandas as pd
+from datetime import datetime
 
 def format_date_column(df, date_col, freq="M"):
     """
@@ -48,9 +49,6 @@ def add_time_features(df, date_col="Date"):
     
     return df
 
-
-from datetime import datetime, timedelta
-import pandas as pd
 
 def generate_dates(start_date, end_date, aggregation_level, num_periods=None):
     """
