@@ -2,7 +2,6 @@
 import plotly.express as px
 import pandas as pd
 import streamlit as st
-import matplotlib.pyplot as plt
 from datetime import datetime
 import numpy as np
 
@@ -40,13 +39,13 @@ def generate_streamlit_report(metrics, forecasts, test_df):
     st.subheader("Detailed Forecast Analysis")
     
     # 1. Metrics display
-    with st.expander("Model Metrics"):
+    with st.expander("Table Model Metrics"):
         # Convert metrics dict to DataFrame
         metrics_df = pd.DataFrame([metrics])
         st.table(metrics_df)
     
     # 2. Error distribution
-    with st.expander("Error Analysis"):
+    with st.expander("Chart Error Analysis"):
         try:
             # Ensure forecasts is numpy array
             forecasts = np.asarray(forecasts)

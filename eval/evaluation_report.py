@@ -105,27 +105,28 @@ def plot_actual_vs_predicted(y_true, y_pred, model_name):
     
     # Show the error plot
     st.plotly_chart(error_fig, use_container_width=True)
-    
-    # Show data table with statistics
     st.subheader("Prediction Data")
-    pred_df = pd.DataFrame({
-        "Actual": y_true,
-        "Predicted": y_pred,
-        "Error": errors
-    })
+    with st.expander("Table Data"):
+    # Show data table with statistics
+        
+        pred_df = pd.DataFrame({
+            "Actual": y_true,
+            "Predicted": y_pred,
+            "Error": errors
+        })
     
-    # Add summary statistics row
-    stats_row = pd.DataFrame({
-        "Actual": ["Mean: {:.2f}".format(np.mean(y_true))],
-        "Predicted": ["Mean: {:.2f}".format(np.mean(y_pred))],
-        "Error": ["Mean: {:.2f}".format(np.mean(errors))]
-    })
-    pred_df = pd.concat([pred_df, stats_row], ignore_index=True)
-    
-    st.dataframe(pred_df.style.apply(
-        lambda x: ['background: lightyellow' if x.name == len(pred_df)-1 else '' for i in x],
-        axis=1
-    ))
+        # Add summary statistics row
+        stats_row = pd.DataFrame({
+            "Actual": ["Mean: {:.2f}".format(np.mean(y_true))],
+            "Predicted": ["Mean: {:.2f}".format(np.mean(y_pred))],
+            "Error": ["Mean: {:.2f}".format(np.mean(errors))]
+        })
+        pred_df = pd.concat([pred_df, stats_row], ignore_index=True)
+        
+        st.dataframe(pred_df.style.apply(
+            lambda x: ['background: lightyellow' if x.name == len(pred_df)-1 else '' for i in x],
+            axis=1
+        ))
 
 
 def generate_comparison_plot(metrics_dict):

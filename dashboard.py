@@ -59,9 +59,10 @@ def main():
         st.stop()
 
     df = load_data(uploaded_file)
-    preview_data(df.head())
-    if df is None:
-        st.stop()
+    with st.expander("Click to Preview CSV"):
+        preview_data(df.head())
+        if df is None:
+            st.stop()
 
     required_columns = {'Date', 'target'}
     missing_cols = required_columns - set(df.columns)
