@@ -10,7 +10,7 @@ def preprocess_test_df(test_df, full_df, date_col="Date"):
     test_df = test_df.sort_values(date_col).reset_index(drop=True)
     test_df["time_idx"] = (test_df[date_col] - full_df[date_col].min()).dt.days
     test_df["time_idx"] = test_df["time_idx"].astype(np.int64)
-    test_df["group_id"] = test_df.get("Item_code", "0").astype(str)
+    test_df["group_id"] = test_df.get("Item_code", "0")
     return test_df
 
 

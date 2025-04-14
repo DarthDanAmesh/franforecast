@@ -10,3 +10,4 @@ xgboost
 altair
 lightning
 lightning[extra]
+chronos-forecasting==1.5.0

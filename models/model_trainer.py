@@ -8,6 +8,9 @@ from lightning.pytorch import Trainer
 from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
 from lightning.pytorch.loggers import TensorBoardLogger
 from pytorch_forecasting import DeepAR, NormalDistributionLoss
+from chronos import ChronosPipeline
+from models.forecast_generator import generate_forecast, chronos_predict
+import torch
 import lightning.pytorch as pl
 import pandas as pd
 
@@ -39,6 +42,11 @@ config = {
             "hidden_size": 32,
             "dropout": 0.1,
             "batch_size": 64
+        },
+        "Chronos": {
+            "model_size": "tiny",  # "tiny", "small", "base", or "large"
+            "context_length": 24,   # Number of historical points to use
+            "quantiles": [0.1, 0.5, 0.9]  # Prediction intervals
         }
     }
 }
@@ -178,6 +186,92 @@ def train_xgboost(X_train, y_train, params):
     model = XGBRegressor(**params)
     model.fit(X_train, y_train)
     return model
+
+
+
+def train_chronos(train_df, full_data=None, training_cutoff=None, context_length=None, 
+                 prediction_length=None, model_size="tiny", **kwargs):
+    """
+    Load a pretrained Chronos foundation model for time series forecasting.
+    """
+    try:
+        # Model size validation
+        model_map = {
+            "tiny": "amazon/chronos-t5-tiny",
+            "small": "amazon/chronos-t5-small",
+            "base": "amazon/chronos-t5-base",
+            "large": "amazon/chronos-t5-large",
+        }
+        
+        if model_size not in model_map:
+            raise ValueError(f"Invalid model_size '{model_size}'. Choose from {list(model_map.keys())}")
+            
+        # Load pretrained model
+        pipeline = ChronosPipeline.from_pretrained(
+            model_map[model_size],
+            device_map="auto",
+            torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
+        )
+        
+        return pipeline
+        
+    except Exception as e:
+        print(f"Chronos initialization failed: {str(e)}")
+        raise
+
+
+def train_chronos_dep(train_df, full_data=None, training_cutoff=None, context_length=None, 
+                 prediction_length=None, model_size="tiny", **kwargs):
+    """
+    Load a pretrained Chronos foundation model for time series forecasting.
+    
+    Note: Chronos doesn't require traditional training - this function loads the pretrained model
+    but maintains consistent interface with other models.
+    
+    Parameters not used (kept for interface consistency):
+    - full_data: Not used by Chronos
+    - training_cutoff: Not used by Chronos
+    - context_length: Not used during loading (used during prediction)
+    - prediction_length: Not used during loading (used during prediction)
+    """
+    try:
+        # Convert dataframe to Chronos expected format
+        chronos_data = train_df.rename(columns={
+            'time_idx': 'date',    # Maps your time index to expected column
+            'target': 'value'      # Maps your target to expected column
+        })
+        
+        # Handle grouped time series
+        if "group_id" in train_df.columns:
+            chronos_data['unique_id'] = train_df['group_id']
+        else:
+            chronos_data['unique_id'] = 0  # Default for single series
+            
+        # Model size validation
+        model_map = {
+            "tiny": "amazon/chronos-t5-tiny",
+            "small": "amazon/chronos-t5-small",
+            "base": "amazon/chronos-t5-base",
+            "large": "amazon/chronos-t5-large",
+        }
+        
+        if model_size not in model_map:
+            raise ValueError(f"Invalid model_size '{model_size}'. Choose from {list(model_map.keys())}")
+            
+        # Load pretrained model
+        pipeline = ChronosPipeline.from_pretrained(
+            model_map[model_size],
+            device_map="auto",
+            torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
+        )
+        
+        return pipeline
+        
+    except Exception as e:
+        print(f"Chronos initialization failed: {str(e)}")
+        raise
+
+
 
 def train_tft(train_dataset, full_data, training_cutoff, **kwargs):
     """
