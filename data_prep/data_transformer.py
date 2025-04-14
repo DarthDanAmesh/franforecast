@@ -3,7 +3,7 @@
 import pandas as pd
 import streamlit as st
 
-def format_date_column(df, date_col, freq="M"):
+def format_date_column(df, date_col, freq="ME"):
     """
     Format the date column to datetime and resample the data.
     Parameters

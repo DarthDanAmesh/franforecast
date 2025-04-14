@@ -249,7 +249,7 @@ def main():
             )
 
             # Generate forecasts
-            forecasts = generate_forecast(model, test_dataset)
+            forecasts = generate_forecast(model, train_dataset)
     except Exception as e:
         st.error(f"Forecast generation failed: {str(e)}")
         st.write("Details:")
