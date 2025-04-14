@@ -187,39 +187,63 @@ def main():
                     st.error(f"Not enough data for DeepAR. Need at least {config['prediction_length'] * 2} samples.")
                     st.stop()
                     
-                # Calculate context length more carefully
-                context_length = min(
-                    24, 
-                    max(1, len(train_df) // 4),  # Ensure at least 1
-                    len(train_df) - config["prediction_length"]
-                )
-                train_dataset, full_df, cutoff = prepare_time_series_dataset(
-                    df,
-                    target_col="target",
-                    date_col="Date",
-                    freq=user_inputs["aggregation_level"][0],
-                    prediction_length=config["prediction_length"]
-                )
-                deepar_model = None
-                if use_saved_model:
-                    try:
-                        deepar_model = model_manager.load_deepar_model("deepar_model.pt", train_dataset)
-                    except Exception as e:
-                        st.warning(f"Failed to load saved DeepAR model: {e}")
-                        deepar_model = None
-                if deepar_model is None:
-                    # Determine context length based on data or config
-                    context_length = min(24, len(train_dataset) // 4)  # Example: use 24 or 1/4 of dataset length
-                    deepar_model = train_deepar(
-                        train_df=full_df,
-                        full_data=full_df,
-                        training_cutoff=cutoff, 
-                        context_length=context_length,
-                        prediction_length=config["prediction_length"],
-                        **config["model_params"]["DeepAR"]
+                # Adjust context length based on aggregation level
+                if user_inputs["aggregation_level"] == "Monthly":
+                    # For monthly data, use smaller context length
+                    context_length = min(
+                        12,  # Max 1 year of monthly history
+                        max(3, len(train_df) // 3),  # At least 3 months
+                        len(train_df) - config["prediction_length"]
                     )
-                    model_manager.save_deepar_model(deepar_model, train_dataset, "deepar_model.pt")
-                model = deepar_model
+                else:
+                    context_length = min(
+                        24, 
+                        max(1, len(train_df) // 4),
+                        len(train_df) - config["prediction_length"]
+                    )
+                
+                # Adjust frequency string for TimeSeriesDataSet
+                freq_map = {
+                    "Daily": "D",
+                    "Weekly": "W-MON",
+                    "Monthly": "MS"
+                }
+                freq = freq_map[user_inputs["aggregation_level"]]
+                
+                try:
+                    train_dataset, full_df, cutoff = prepare_time_series_dataset(
+                        df,
+                        target_col="target",
+                        date_col="Date",
+                        freq=freq,
+                        prediction_length=config["prediction_length"]                        
+                    )
+                    
+                    deepar_model = None
+                    if use_saved_model:
+                        try:
+                            deepar_model = model_manager.load_deepar_model("deepar_model.pt", train_dataset)
+                        except Exception as e:
+                            st.warning(f"Failed to load saved DeepAR model: {e}")
+                            deepar_model = None
+                            
+                    if deepar_model is None:
+                        deepar_model = train_deepar(
+                            train_df=full_df,
+                            full_data=full_df,
+                            training_cutoff=cutoff, 
+                            context_length=context_length,
+                            prediction_length=config["prediction_length"],
+                            **config["model_params"]["DeepAR"]
+                        )
+                        model_manager.save_deepar_model(deepar_model, train_dataset, "deepar_model.pt")
+                        
+                    model = deepar_model
+                    
+                except Exception as e:
+                    st.error(f"DeepAR initialization failed with {user_inputs['aggregation_level']} data: {str(e)}")
+                    st.write("Try using more data or a different aggregation level")
+                    st.stop()
 
             #model selection for chronos
             elif selected_model == "Chronos":
