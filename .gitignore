@@ -1,25 +1,12 @@
-# Byte-compiled / optimized / DLL files
-
-utils/__pycache__/
-*.py[cod]
-*$py.class
-data_prep/__pycache__/
-*.py[cod]
-*$py.class
-input/__pycache__/
-*.py[cod]
-*$py.class
-reports/__pycache__/
-*.py[cod]
-*$py.class
-eval/__pycache__/
-models/__pycache__/
-*.py[cod]
-*$py.class
-
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Local artifacts
+saved_models/
+.streamlit/secrets.toml
+.pytest_cache/
 
 # C extensions
 *.so

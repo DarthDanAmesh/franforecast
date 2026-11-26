@@ -1,13 +1,14 @@
-streamlit
-holidays
-weasyprint
-streamlit
-scipy
-scikit-learn
-pandas
-joblib
-xgboost
-altair
-lightning
-lightning[extra]
-chronos-forecasting==1.5.0
+# Verified working set (Python 3.13, CPU-only). Pins match the versions the
+# test suite and browser checks were run against.
+pandas==3.0.5
+numpy==2.2.6
+plotly==6.3.0
+streamlit==1.45.1
+scikit-learn==1.7.2
+lightgbm==4.6.0
+statsmodels==0.14.6
+holidays==0.109
+pytest==9.1.1
+
+# Optional foundation model (large download, slow on CPU):
+#   pip install chronos-forecasting==1.5.0

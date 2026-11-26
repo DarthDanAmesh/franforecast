@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "franforecast"
+version = "2.0.0"
+description = "Demand forecasting and rolling-origin backtesting for Franke sales series"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.2,<4",
+    "numpy>=1.26,<3",
+    "plotly>=5.20,<7",
+    "streamlit>=1.40,<2",
+    "scikit-learn>=1.4,<2",
+    "lightgbm>=4.3,<5",
+    "statsmodels>=0.14,<0.15",
+    "holidays>=0.60,<1",
+]
+
+[project.optional-dependencies]
+chronos = ["chronos-forecasting==1.5.0", "torch>=2.0"]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+include = ["franforecast*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
